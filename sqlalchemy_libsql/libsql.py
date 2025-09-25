@@ -3,7 +3,7 @@ import urllib.parse
 
 from sqlalchemy import util
 from sqlalchemy.dialects.sqlite.pysqlite import SQLiteDialect_pysqlite
-from libsql_experimental import Connection
+from libsql import Connection
 
 
 def _build_connection_url(url, query, secure):
@@ -47,12 +47,12 @@ class SQLiteDialect_libsql(SQLiteDialect_pysqlite):
 
     @classmethod
     def import_dbapi(cls):
-        import libsql_experimental as libsql
+        import libsql
 
         return libsql
 
     def on_connect(self):
-        import libsql_experimental as libsql
+        import libsql
 
         sqlite3_connect = super().on_connect()
 
