@@ -9,7 +9,7 @@ SQLAlchemy 2.x dialect for [libSQL](https://turso.tech/libsql) / Turso, built on
 - `sqlalchemy_libsql/aiolibsql.py` — `SQLiteDialect_aiolibsql` plus an asyncio adaptation layer (`_AsyncConnection`/`_AsyncCursor` facades, `AsyncAdapt_libsql_*` built on SQLAlchemy's `sqlalchemy.connectors.asyncio` classes, `AsyncAdapt_libsql_dbapi`).
 - `tests/test_basic.py` (sync) and `tests/test_async.py` (async, `pytest-asyncio`) — fixtures parametrized over `memory`, `file`, `remote`, `embedded`.
 - `pyproject.toml` — packaging (setuptools-style `[project]`, built with `uv build`), entry points `sqlite.libsql` / `sqlite.aiolibsql` under `sqlalchemy.dialects`. `uv.lock` (refresh with `uv lock --upgrade`; it forks per Python version), `flake.nix`, `.envrc` (direnv + nix) for dev env.
-- `.github/workflows/test.yml` (pytest matrix; on Linux installs `sqld` and runs it on :8080), `publish.yml` (trusted publishing to PyPI on GitHub release). Keep action versions current (`checkout@v6`, `setup-python@v6`, `setup-uv@v6`).
+- `.github/workflows/test.yml` (pytest matrix; on Linux installs `sqld` to `~/.sqld` via `CARGO_DIST_FORCE_INSTALL_DIR`, since the installer defaults to `~/.cargo/bin`, and runs it on :8080), `publish.yml` (trusted publishing to PyPI on GitHub release). Keep action versions current (`checkout@v6`, `setup-python@v6`, `setup-uv@v6`).
 
 ## Commands
 
@@ -33,7 +33,8 @@ Requires **Python ≥3.10** (project minimum; CI tests 3.10–3.14 on Linux and 
 - `aiolibsql`: the `libsql` driver is synchronous, so `import_dbapi()` returns `AsyncAdapt_libsql_dbapi`, whose `connect()` wraps the sync connection in awaitable facades and SQLAlchemy's `AsyncAdapt_dbapi_connection/cursor`. Calls run directly on the event loop (not offloaded to a thread) — they block it. `get_pool_class` returns `AsyncAdaptedQueuePool` for files/remote hosts and `StaticPool` for plain in-memory. Requires SQLAlchemy ≥ 2.0.44 (`_async_soft_close`).
 - `create_connect_args()` renames `check_same_thread`/`uri` to `_check_same_thread`/`_uri` and drops `detect_types`/`cached_statements`, because `libsql.connect()` rejects the un-prefixed/unsupported sqlite3 kwargs.
 - **Hrana/dead connections:** `is_disconnect` treats `OperationalError`/`ProgrammingError` messages such as `stream not found`/`stream expired`/`connection closed` as disconnects so the pool invalidates the connection (use with `pool_pre_ping=True` and `pool_recycle` on Turso). This needs a libsql driver with the DB-API exception hierarchy (post-0.1.11, i.e. libsql-python on this branch); with older drivers errors are bare `ValueError`s that SQLAlchemy never classifies, and the hook is inert (tests in `tests/test_disconnect.py` skip).
-- Because the driver is `libsql` (not `sqlite3`), driver quirks leak through: errors from the driver are `ValueError`, parameters are positional/qmark only, and unsupported pysqlite features (e.g. user-defined functions) are skipped.
+- Because the driver is `libsql` (not `sqlite3`), driver quirks leak through: with PyPI libsql ≤0.1.11, driver errors are bare `ValueError`s and `Connection.isolation_level` is read-only (so `execution_options(isolation_level="AUTOCOMMIT")` raises AttributeError; `tests/test_isolation.py` skips). Parameters are positional/qmark only, and unsupported pysqlite features (e.g. user-defined functions) are skipped.
+- Tests: the async `remote` fixture mirrors the recommended Turso setup (`?secure=...`, `AsyncAdaptedQueuePool`, `pool_size=5`, `max_overflow=10`, `pool_pre_ping=True`, `pool_recycle=300`). `TURSO_SECURE` defaults to `true`; CI sets it to `false` for plain-HTTP local sqld. `test_pool_pre_ping_replaces_dead_connection` simulates a dead pooled connection.
 
 ## Conventions / gotchas
 

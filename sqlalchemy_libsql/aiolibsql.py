@@ -91,6 +91,10 @@ class _AsyncConnection:
     def isolation_level(self) -> Optional[str]:
         return self._connection.isolation_level
 
+    @isolation_level.setter
+    def isolation_level(self, value: Optional[str]) -> None:
+        self._connection.isolation_level = value
+
     def cursor(self) -> _AsyncCursor:
         return _AsyncCursor(self._connection.cursor())
 
@@ -116,6 +120,12 @@ class AsyncAdapt_libsql_connection(AsyncAdapt_dbapi_connection):
     @property
     def isolation_level(self) -> Optional[str]:
         return self._connection.isolation_level
+
+    # SQLAlchemy's pysqlite set_isolation_level() assigns this attribute
+    # (None for AUTOCOMMIT); needs a libsql driver where it is writable.
+    @isolation_level.setter
+    def isolation_level(self, value: Optional[str]) -> None:
+        self._connection.isolation_level = value
 
 
 class AsyncAdapt_libsql_dbapi:

@@ -49,7 +49,9 @@ jobs:
       - name: Install sqld
         if: runner.os == 'Linux'
         run: |
-          curl --proto '=https' --tlsv1.2 -LsSf "https://github.com/tursodatabase/libsql/releases/download/${LIBSQL_SERVER_RELEASE}/libsql-server-installer.sh" | sh
+          # The cargo-dist installer defaults to ~/.cargo/bin; pin the location.
+          curl --proto '=https' --tlsv1.2 -LsSf "https://github.com/tursodatabase/libsql/releases/download/${LIBSQL_SERVER_RELEASE}/libsql-server-installer.sh" \
+            | CARGO_DIST_FORCE_INSTALL_DIR="$HOME/.sqld" sh -s -- --no-modify-path
           echo "$HOME/.sqld/bin" >> "$GITHUB_PATH"
           "$HOME/.sqld/bin/sqld" --version
 
@@ -72,6 +74,8 @@ jobs:
         shell: bash
         env:
           TURSO_AUTH_TOKEN: ""
+          # Local sqld speaks plain HTTP; real Turso URLs use the default (true).
+          TURSO_SECURE: "false"
         run: |
           if [ "$RUNNER_OS" = "Linux" ]; then export TURSO_DATABASE_URL="localhost:8080"; fi
           pytest --cov=sqlalchemy_libsql tests/

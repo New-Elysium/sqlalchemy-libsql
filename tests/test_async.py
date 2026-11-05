@@ -1,6 +1,7 @@
+import asyncio
+
 import pytest
 import pytest_asyncio
-import asyncio
 from sqlalchemy import Column, Integer, String, text, select
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import declarative_base
@@ -30,12 +31,19 @@ async def engine(request):
                 poolclass=AsyncAdaptedQueuePool,
             )
         case "remote" if os.getenv("TURSO_DATABASE_URL"):
+            # Mirrors the recommended Turso setup: a real pool with pre-ping
+            # and recycling, so dead Hrana streams ("404 stream not found")
+            # are detected and replaced. TURSO_SECURE=false is only for a
+            # plain-HTTP local sqld (as in CI); Turso itself needs https.
+            secure = os.getenv("TURSO_SECURE", "true")
             engine = create_async_engine(
-                f"sqlite+aiolibsql://{os.getenv('TURSO_DATABASE_URL')}?secure=false",
+                f"sqlite+aiolibsql://{os.getenv('TURSO_DATABASE_URL').strip()}?secure={secure}",
+                connect_args={"auth_token": os.getenv("TURSO_AUTH_TOKEN")},
                 poolclass=AsyncAdaptedQueuePool,
-                connect_args={
-                    "auth_token": os.getenv("TURSO_AUTH_TOKEN"),
-                },
+                pool_size=5,
+                max_overflow=10,
+                pool_pre_ping=True,
+                pool_recycle=300,
             )
         case "embedded" if os.getenv("TURSO_DATABASE_URL"):
             if os.path.exists("test_embedded.db"):
@@ -49,7 +57,7 @@ async def engine(request):
                 },
             )
         case "memory" | _:
-            engine =  create_async_engine(
+            engine = create_async_engine(
                 "sqlite+aiolibsql://",
                 poolclass=AsyncAdaptedQueuePool,
             )
@@ -125,3 +133,48 @@ async def test_delete(session):
     stmt = select(User)
     result = await session.execute(stmt)
     assert result.scalars().first() is None
+
+
+@pytest.mark.asyncio
+async def test_concurrent_sessions(engine, session):
+    # Several sessions at once check out separate pooled connections (or
+    # share the StaticPool one for :memory:) without interfering.
+    async_session = async_sessionmaker(engine, class_=AsyncSession)
+
+    async def count(i):
+        async with async_session() as s:
+            result = await s.execute(text("SELECT :i"), {"i": i})
+            return result.scalar()
+
+    assert await asyncio.gather(*(count(i) for i in range(8))) == list(range(8))
+
+
+@pytest.mark.asyncio
+async def test_pool_pre_ping_replaces_dead_connection(tmp_path):
+    # A connection that died while idle in the pool (what happens to a Hrana
+    # stream the server expired) must be detected by pre-ping and replaced,
+    # not handed to the application.
+    import libsql
+
+    if not hasattr(libsql, "ProgrammingError"):
+        pytest.skip("libsql driver predates the DB-API exception hierarchy")
+
+    engine = create_async_engine(
+        f"sqlite+aiolibsql:///{tmp_path / 'ping.db'}",
+        poolclass=AsyncAdaptedQueuePool,
+        pool_size=1,
+        max_overflow=0,
+        pool_pre_ping=True,
+    )
+    try:
+        async with engine.connect() as conn:
+            raw = await conn.get_raw_connection()
+            first = raw.driver_connection
+            first.close()  # kill it behind the pool's back
+
+        async with engine.connect() as conn:
+            assert (await conn.execute(text("SELECT 1"))).scalar() == 1
+            raw = await conn.get_raw_connection()
+            assert raw.driver_connection is not first
+    finally:
+        await engine.dispose()
