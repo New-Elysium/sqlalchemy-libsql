@@ -21,16 +21,15 @@ class User(Base):
 
 
 @pytest_asyncio.fixture(params=["memory", "file", "remote", "embedded"])
-async def engine(request):
+async def engine(request, tmp_path):
     import os
 
     database_url = os.getenv("TURSO_DATABASE_URL")
+    sync_url = os.getenv("TURSO_SYNC_URL")
     match request.param:
         case "file":
-            if os.path.exists("test.db"):
-                os.remove("test.db")
             engine = create_async_engine(
-                "sqlite+aiolibsql:///test.db",
+                f"sqlite+aiolibsql:///{tmp_path / 'test.db'}",
                 poolclass=AsyncAdaptedQueuePool,
             )
         case "remote" if database_url:
@@ -41,24 +40,27 @@ async def engine(request):
             secure = os.getenv("TURSO_SECURE", "true")
             engine = create_async_engine(
                 f"sqlite+aiolibsql://{database_url.strip()}?secure={secure}",
-                connect_args={"auth_token": os.getenv("TURSO_AUTH_TOKEN")},
+                connect_args={"auth_token": os.getenv("TURSO_AUTH_TOKEN", "")},
                 poolclass=AsyncAdaptedQueuePool,
                 pool_size=5,
                 max_overflow=10,
                 pool_pre_ping=True,
                 pool_recycle=300,
             )
-        case "embedded" if database_url:
-            if os.path.exists("test_embedded.db"):
-                os.remove("test_embedded.db")
+        case "remote":
+            pytest.skip("TURSO_DATABASE_URL not set")
+        case "embedded" if sync_url:
+            # /export-based sync: Turso Cloud only, not open-source sqld.
             engine = create_async_engine(
-                "sqlite+aiolibsql:///test_embedded.db",
+                f"sqlite+aiolibsql:///{tmp_path / 'test_embedded.db'}",
                 poolclass=AsyncAdaptedQueuePool,
                 connect_args={
-                    "auth_token": os.getenv("TURSO_AUTH_TOKEN"),
-                    "sync_url": f"http://{os.getenv('TURSO_DATABASE_URL')}",
+                    "auth_token": os.getenv("TURSO_AUTH_TOKEN", ""),
+                    "sync_url": sync_url,
                 },
             )
+        case "embedded":
+            pytest.skip("TURSO_SYNC_URL not set")
         case "memory" | _:
             engine = create_async_engine(
                 "sqlite+aiolibsql://",

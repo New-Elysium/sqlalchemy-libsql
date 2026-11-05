@@ -16,36 +16,36 @@ class User(Base):
 
 
 @pytest.fixture(params=["memory", "file", "remote", "embedded"])
-def engine(request):
+def engine(request, tmp_path):
     import os
 
     database_url = os.getenv("TURSO_DATABASE_URL")
+    # Embedded replicas sync via /export, which Turso Cloud serves but the
+    # open-source sqld does not, so they need an explicit TURSO_SYNC_URL.
+    sync_url = os.getenv("TURSO_SYNC_URL")
+    auth_token = os.getenv("TURSO_AUTH_TOKEN", "")
     match request.param:
-        case "memory":
-            return create_engine("sqlite+libsql://")
         case "file":
-            if os.path.exists("test.db"):
-                os.remove("test.db")
-            return create_engine("sqlite+libsql:///test.db")
+            engine = create_engine(f"sqlite+libsql:///{tmp_path / 'test.db'}")
         case "remote" if database_url:
-            return create_engine(
-                f"sqlite+libsql://{os.getenv('TURSO_DATABASE_URL')}?secure=false",
-                connect_args={
-                    "auth_token": os.getenv("TURSO_AUTH_TOKEN"),
-                },
+            secure = os.getenv("TURSO_SECURE", "true")
+            engine = create_engine(
+                f"sqlite+libsql://{database_url.strip()}?secure={secure}",
+                connect_args={"auth_token": auth_token},
             )
-        case "embedded" if database_url:
-            if os.path.exists("test_embedded.db"):
-                os.remove("test_embedded.db")
-            return create_engine(
-                "sqlite+libsql:///test_embedded.db",
-                connect_args={
-                    "auth_token": os.getenv("TURSO_AUTH_TOKEN"),
-                    "sync_url": f"http://{os.getenv('TURSO_DATABASE_URL')}",
-                },
+        case "remote":
+            pytest.skip("TURSO_DATABASE_URL not set")
+        case "embedded" if sync_url:
+            engine = create_engine(
+                f"sqlite+libsql:///{tmp_path / 'test_embedded.db'}",
+                connect_args={"auth_token": auth_token, "sync_url": sync_url},
             )
+        case "embedded":
+            pytest.skip("TURSO_SYNC_URL not set")
         case _:
-            return create_engine("sqlite+libsql://")
+            engine = create_engine("sqlite+libsql://")
+    yield engine
+    engine.dispose()
 
 
 @pytest.fixture

@@ -20,7 +20,7 @@ pytest tests/                # memory + file cases always run
 pytest --cov=sqlalchemy_libsql tests/   # what CI runs
 ```
 
-Remote/embedded cases only use the real server when `TURSO_DATABASE_URL` is set (e.g. `localhost:8080` with `sqld` running, `TURSO_AUTH_TOKEN=""`); otherwise those fixture params silently fall back to an in-memory engine, so a green run without the env vars does NOT exercise remote/embedded paths. Tests create `test.db` / `test_embedded.db` in the cwd (gitignored).
+Remote cases need `TURSO_DATABASE_URL` (e.g. `localhost:8080` with `sqld`, `TURSO_AUTH_TOKEN=""`, `TURSO_SECURE=false`); embedded-replica cases need `TURSO_SYNC_URL`, because libsql's sync pulls from `/export/{generation}`, which Turso Cloud serves but open-source sqld doesn't (404). Without these variables the cases are reported as skipped, not silently run in memory. CI covers remote against sqld; embedded only runs against real Turso. File databases go in pytest's `tmp_path`, and fixtures dispose their engines (Windows can't delete open files).
 
 Requires **Python ≥3.10** (project minimum; CI tests 3.10–3.14 on Linux and 3.12 on macOS/Windows; `.python-version` is 3.12). Don't use 3.12-only syntax (e.g. nested same-quote f-strings) in code, tests or README.
 
