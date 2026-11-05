@@ -1,21 +1,25 @@
 import pytest
-from sqlalchemy import create_engine, Column, Integer, String, text
-from sqlalchemy.orm import declarative_base, sessionmaker
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 
-Base = declarative_base()
+
+class Base(DeclarativeBase):
+    pass
 
 
 class User(Base):
     __tablename__ = "users"
 
-    id = Column(Integer, primary_key=True)
-    name = Column(String)
-    email = Column(String)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str | None]
+    email: Mapped[str | None]
 
 
 @pytest.fixture(params=["memory", "file", "remote", "embedded"])
 def engine(request):
     import os
+
+    database_url = os.getenv("TURSO_DATABASE_URL")
     match request.param:
         case "memory":
             return create_engine("sqlite+libsql://")
@@ -23,14 +27,14 @@ def engine(request):
             if os.path.exists("test.db"):
                 os.remove("test.db")
             return create_engine("sqlite+libsql:///test.db")
-        case "remote" if os.getenv("TURSO_DATABASE_URL"):
+        case "remote" if database_url:
             return create_engine(
                 f"sqlite+libsql://{os.getenv('TURSO_DATABASE_URL')}?secure=false",
                 connect_args={
                     "auth_token": os.getenv("TURSO_AUTH_TOKEN"),
                 },
             )
-        case "embedded" if os.getenv("TURSO_DATABASE_URL"):
+        case "embedded" if database_url:
             if os.path.exists("test_embedded.db"):
                 os.remove("test_embedded.db")
             return create_engine(

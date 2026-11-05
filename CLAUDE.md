@@ -38,9 +38,11 @@ Requires **Python ≥3.10** (project minimum; CI tests 3.10–3.14 on Linux and 
 
 ## Conventions / gotchas
 
+- Lint: `ruff check .`, `ruff format --check .`, `ty check .` must be clean (CI `lint` job; tools are in the `dev` extra; config in `pyproject.toml`). `[tool.ty.analysis] replace-imports-with-any = ["libsql"]` exists only because PyPI libsql ≤0.1.11 has no stubs; remove it once the libsql floor ships `libsql.pyi`.
 - Dialect behavior should stay a minimal layer over `SQLiteDialect_pysqlite`; prefer overriding only what libsql needs and comment why (existing comments document the reasons).
 - Changes to driver semantics belong in `libsql-python`; if a fix there is required, coordinate both repos (both use branch `claude/vibrant-dijkstra-l2vbig` in this session).
 - Keep entry points in `pyproject.toml` and registry calls in `__init__.py` in sync when adding dialects.
 - When bumping the version, update `pyproject.toml` (and ideally the stale `__version__`).
 - Repo URLs in `pyproject.toml`/README point to `tursodatabase/libsql-sqlalchemy` / `libsql-experimental-python`; the git remote here is `new-elysium/sqlalchemy-libsql`.
 - Don't commit `*.db`, `.direnv`, `dist/`, `htmlcov/`, `.coverage`.
+- Pre-commit: `.pre-commit-config.yaml` runs ruff and ty (`pip install pre-commit && pre-commit install`).

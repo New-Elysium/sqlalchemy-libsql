@@ -2,26 +2,29 @@ import asyncio
 
 import pytest
 import pytest_asyncio
-from sqlalchemy import Column, Integer, String, text, select
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from sqlalchemy.orm import declarative_base
+from sqlalchemy import select, text
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.pool import AsyncAdaptedQueuePool
 
-Base = declarative_base()
+
+class Base(DeclarativeBase):
+    pass
 
 
 class User(Base):
     __tablename__ = "users"
 
-    id = Column(Integer, primary_key=True)
-    name = Column(String)
-    email = Column(String)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str | None]
+    email: Mapped[str | None]
 
 
 @pytest_asyncio.fixture(params=["memory", "file", "remote", "embedded"])
 async def engine(request):
     import os
 
+    database_url = os.getenv("TURSO_DATABASE_URL")
     match request.param:
         case "file":
             if os.path.exists("test.db"):
@@ -30,14 +33,14 @@ async def engine(request):
                 "sqlite+aiolibsql:///test.db",
                 poolclass=AsyncAdaptedQueuePool,
             )
-        case "remote" if os.getenv("TURSO_DATABASE_URL"):
+        case "remote" if database_url:
             # Mirrors the recommended Turso setup: a real pool with pre-ping
             # and recycling, so dead Hrana streams ("404 stream not found")
             # are detected and replaced. TURSO_SECURE=false is only for a
             # plain-HTTP local sqld (as in CI); Turso itself needs https.
             secure = os.getenv("TURSO_SECURE", "true")
             engine = create_async_engine(
-                f"sqlite+aiolibsql://{os.getenv('TURSO_DATABASE_URL').strip()}?secure={secure}",
+                f"sqlite+aiolibsql://{database_url.strip()}?secure={secure}",
                 connect_args={"auth_token": os.getenv("TURSO_AUTH_TOKEN")},
                 poolclass=AsyncAdaptedQueuePool,
                 pool_size=5,
@@ -45,7 +48,7 @@ async def engine(request):
                 pool_pre_ping=True,
                 pool_recycle=300,
             )
-        case "embedded" if os.getenv("TURSO_DATABASE_URL"):
+        case "embedded" if database_url:
             if os.path.exists("test_embedded.db"):
                 os.remove("test_embedded.db")
             engine = create_async_engine(
@@ -63,6 +66,7 @@ async def engine(request):
             )
     yield engine
     await engine.dispose()
+
 
 @pytest_asyncio.fixture
 async def session(engine):
@@ -170,6 +174,7 @@ async def test_pool_pre_ping_replaces_dead_connection(tmp_path):
         async with engine.connect() as conn:
             raw = await conn.get_raw_connection()
             first = raw.driver_connection
+            assert first is not None
             first.close()  # kill it behind the pool's back
 
         async with engine.connect() as conn:

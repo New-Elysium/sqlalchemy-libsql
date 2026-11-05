@@ -27,12 +27,16 @@ def test_autocommit_isolation_level(tmp_path):
         conn.execute(text("CREATE TABLE t(x)"))
         conn.commit()
     with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
-        assert conn.connection.driver_connection.isolation_level is None
+        driver_conn = conn.connection.driver_connection
+        assert driver_conn is not None
+        assert driver_conn.isolation_level is None
         conn.execute(text("INSERT INTO t VALUES (1)"))
         conn.rollback()  # no-op: the insert was autocommitted
     with engine.connect() as conn:
         # The pooled connection is reset to the default level on return.
-        assert conn.connection.driver_connection.isolation_level is not None
+        driver_conn = conn.connection.driver_connection
+        assert driver_conn is not None
+        assert driver_conn.isolation_level is not None
         assert conn.execute(text("SELECT count(*) FROM t")).scalar() == 1
     engine.dispose()
 

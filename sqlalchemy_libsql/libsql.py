@@ -1,9 +1,9 @@
 import os
 import urllib.parse
 
+from libsql import Connection
 from sqlalchemy import util
 from sqlalchemy.dialects.sqlite.pysqlite import SQLiteDialect_pysqlite
-from libsql import Connection
 
 
 def _build_connection_url(url, query, secure):
@@ -80,7 +80,6 @@ class SQLiteDialect_libsql(SQLiteDialect_pysqlite):
         return super().is_disconnect(e, connection, cursor)
 
     def on_connect(self):
-        import libsql
 
         sqlite3_connect = super().on_connect()
 
@@ -121,7 +120,7 @@ class SQLiteDialect_libsql(SQLiteDialect_pysqlite):
             # If SQLite native URIs add a parameter like "timeout" that
             # we already have listed here for the python driver, then we need
             # to adjust for that here.
-            for key, type_ in pysqlite_args:
+            for key, _type in pysqlite_args:
                 uri_opts.pop(key, None)
 
             secure = libsql_opts.pop("secure", False)

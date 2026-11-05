@@ -32,6 +32,8 @@ dev = [
     "pytest>=8.3.5",
     "pytest-cov>=4.1.0",
     "pytest-asyncio>=0.23.5",
+    "ruff>=0.15",
+    "ty>=0.0.1a1",
 ]
 
 [project.urls]
@@ -46,3 +48,14 @@ Issues = "https://github.com/tursodatabase/libsql-sqlalchemy/issues"
 
 [tool.pytest.ini_options]
 asyncio_default_fixture_loop_scope = "function"
+
+[tool.ruff]
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "W", "I", "UP", "B", "PYI"]
+
+[tool.ty.analysis]
+# PyPI libsql <= 0.1.11 ships no type information (stubs land in the next
+# release, see libsql-python's libsql.pyi); drop this once the floor has them.
+replace-imports-with-any = ["libsql"]

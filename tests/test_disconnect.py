@@ -1,5 +1,6 @@
 import libsql
 import pytest
+
 from sqlalchemy_libsql.libsql import SQLiteDialect_libsql
 
 needs_exception_hierarchy = pytest.mark.skipif(
