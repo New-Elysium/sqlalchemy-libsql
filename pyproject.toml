@@ -3,7 +3,7 @@ name = "sqlalchemy-libsql"
 version = "0.2.0"
 description = "SQLAlchemy dialect for libSQL"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [
     { name = "Levy Albuquerque", email = "levy@turso.tech" },
@@ -14,12 +14,17 @@ classifiers = [
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: Database",
 ]
 dependencies = [
-    "sqlalchemy>=2.0.0",
+    "sqlalchemy>=2.0.44",
     "greenlet>=3.0.3",
+    "libsql>=0.1.11",
 ]
 
 [project.optional-dependencies]
@@ -27,6 +32,8 @@ dev = [
     "pytest>=8.3.5",
     "pytest-cov>=4.1.0",
     "pytest-asyncio>=0.23.5",
+    "ruff>=0.15",
+    "ty>=0.0.1a1",
 ]
 
 [project.urls]
@@ -38,3 +45,17 @@ Issues = "https://github.com/tursodatabase/libsql-sqlalchemy/issues"
 [project.entry-points."sqlalchemy.dialects"]
 "sqlite.libsql" = "sqlalchemy_libsql:SQLiteDialect_libsql"
 "sqlite.aiolibsql" = "sqlalchemy_libsql:SQLiteDialect_aiolibsql"
+
+[tool.pytest.ini_options]
+asyncio_default_fixture_loop_scope = "function"
+
+[tool.ruff]
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "W", "I", "UP", "B", "PYI"]
+
+[tool.ty.analysis]
+# PyPI libsql <= 0.1.11 ships no type information (stubs land in the next
+# release, see libsql-python's libsql.pyi); drop this once the floor has them.
+replace-imports-with-any = ["libsql"]

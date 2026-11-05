@@ -1,0 +1,27 @@
+# Install with: pip install pre-commit && pre-commit install
+# Mirrors the CI `lint` job (ruff, ty).
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-yaml
+      - id: check-toml
+      - id: check-merge-conflict
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.17.3
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: local
+    hooks:
+      - id: ty
+        name: ty check
+        entry: ty check .
+        language: python
+        additional_dependencies:
+          [ty==0.0.97, "sqlalchemy>=2.0.44", greenlet, libsql, pytest, pytest-asyncio]
+        types: [python]
+        pass_filenames: false
