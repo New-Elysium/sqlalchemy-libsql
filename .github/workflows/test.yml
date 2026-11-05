@@ -2,55 +2,76 @@ name: Test
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
   workflow_dispatch:
     inputs:
       libsql-server-release:
-        description: 'LibSQL Server Release'
+        description: "LibSQL Server Release"
         required: false
-        default: 'libsql-server-v0.24.32'
-        
+        default: "libsql-server-v0.24.32"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
 jobs:
   test:
-    runs-on: ubuntu-latest
+    name: Test (${{ matrix.os }}, py${{ matrix.python-version }})
+    runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
-        python-version: ["3.12"]
+        os: [ubuntu-latest]
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+        include:
+          - os: macos-26
+            python-version: "3.12"
+          - os: windows-latest
+            python-version: "3.12"
+    env:
+      LIBSQL_SERVER_RELEASE: ${{ github.event.inputs.libsql-server-release || 'libsql-server-v0.24.32' }}
 
     steps:
-    - uses: actions/checkout@v4
-    
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v5
-      with:
-        python-version: ${{ matrix.python-version }}
+      - uses: actions/checkout@v6
 
-    - name: Install sqld
-      run: |
-        curl --proto '=https' --tlsv1.2 -LsSf https://github.com/tursodatabase/libsql/releases/download/${{ github.event.inputs.libsql-server-release || 'libsql-server-v0.24.32' }}/libsql-server-installer.sh | sh
-        echo "$HOME/.sqld/bin" >> $GITHUB_PATH
-        sqld --version
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
 
-    - name: Start sqld server
-      run: |
-        sqld &
-        while ! curl -s http://localhost:8080/health > /dev/null; do
-          echo "Waiting for sqld..."
-          sleep 1
-        done
-        echo "sqld is ready!"
+      # sqld only ships Linux builds here, so the remote/embedded test cases
+      # run against a real server on Linux and fall back to in-memory elsewhere.
+      - name: Install sqld
+        if: runner.os == 'Linux'
+        run: |
+          curl --proto '=https' --tlsv1.2 -LsSf "https://github.com/tursodatabase/libsql/releases/download/${LIBSQL_SERVER_RELEASE}/libsql-server-installer.sh" | sh
+          echo "$HOME/.sqld/bin" >> "$GITHUB_PATH"
+          "$HOME/.sqld/bin/sqld" --version
 
-        
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install .[dev]
-        
-    - name: Run tests
-      env:
-        TURSO_DATABASE_URL: "localhost:8080"
-        TURSO_AUTH_TOKEN: ""
-      run: |
-        pytest --cov=sqlalchemy_libsql tests/ 
+      - name: Start sqld server
+        if: runner.os == 'Linux'
+        run: |
+          sqld &
+          while ! curl -s http://localhost:8080/health > /dev/null; do
+            echo "Waiting for sqld..."
+            sleep 1
+          done
+          echo "sqld is ready!"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install ".[dev]"
+
+      - name: Run tests
+        shell: bash
+        env:
+          TURSO_AUTH_TOKEN: ""
+        run: |
+          if [ "$RUNNER_OS" = "Linux" ]; then export TURSO_DATABASE_URL="localhost:8080"; fi
+          pytest --cov=sqlalchemy_libsql tests/

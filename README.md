@@ -43,7 +43,7 @@ engine = create_engine(
      "sqlite+libsql:///embedded.db",
      connect_args={
          "auth_token": os.getenv("TURSO_AUTH_TOKEN"),
-         "sync_url": f"{os.getenv("TURSO_DATABASE_URL")}",
+         "sync_url": f"{os.getenv('TURSO_DATABASE_URL')}",
      },
 )
 ```
@@ -55,7 +55,7 @@ import os
 from sqlalchemy import create_engine
 
 engine = create_engine(
-    f"sqlite+libsql://{os.getenv("TURSO_DATABASE_URL")}?secure=true",
+    f"sqlite+libsql://{os.getenv('TURSO_DATABASE_URL')}?secure=true",
     connect_args={
         "auth_token": os.getenv("TURSO_AUTH_TOKEN"),
     },

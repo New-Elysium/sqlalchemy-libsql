@@ -51,6 +51,34 @@ class SQLiteDialect_libsql(SQLiteDialect_pysqlite):
 
         return libsql
 
+    # Messages that mean the connection (or the Hrana stream behind it) is gone.
+    # Turso multiplexes Hrana "streams" over one socket; when the server drops
+    # it (idle timeout, network blip) every stream dies with e.g.
+    # `404 stream not found`, and the pooled connection must be discarded.
+    _DISCONNECT_MESSAGES = (
+        "stream not found",
+        "stream expired",
+        "stream closed",
+        "connection closed",
+        "connection reset",
+        "connection refused",
+        "broken pipe",
+        "error sending request",
+        "connection already closed",
+        "websocket",
+    )
+
+    def is_disconnect(self, e, connection, cursor):
+        # libsql versions before the DB-API exception hierarchy (<= 0.1.11)
+        # raise plain ValueErrors, which SQLAlchemy never routes here.
+        names = ("OperationalError", "ProgrammingError")
+        types = tuple(t for t in (getattr(self.dbapi, n, None) for n in names) if t)
+        if types and isinstance(e, types):
+            message = str(e).lower()
+            if any(m in message for m in self._DISCONNECT_MESSAGES):
+                return True
+        return super().is_disconnect(e, connection, cursor)
+
     def on_connect(self):
         import libsql
 

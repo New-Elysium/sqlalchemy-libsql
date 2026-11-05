@@ -25,7 +25,7 @@ def engine(request):
             return create_engine("sqlite+libsql:///test.db")
         case "remote" if os.getenv("TURSO_DATABASE_URL"):
             return create_engine(
-                f"sqlite+libsql://{os.getenv("TURSO_DATABASE_URL")}?secure=false",
+                f"sqlite+libsql://{os.getenv('TURSO_DATABASE_URL')}?secure=false",
                 connect_args={
                     "auth_token": os.getenv("TURSO_AUTH_TOKEN"),
                 },
@@ -37,7 +37,7 @@ def engine(request):
                 "sqlite+libsql:///test_embedded.db",
                 connect_args={
                     "auth_token": os.getenv("TURSO_AUTH_TOKEN"),
-                    "sync_url": f"http://{os.getenv("TURSO_DATABASE_URL")}",
+                    "sync_url": f"http://{os.getenv('TURSO_DATABASE_URL')}",
                 },
             )
         case _:
