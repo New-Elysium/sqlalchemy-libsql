@@ -18,8 +18,9 @@ classifiers = [
     "Topic :: Database",
 ]
 dependencies = [
-    "sqlalchemy>=2.0.0",
+    "sqlalchemy>=2.0.44",
     "greenlet>=3.0.3",
+    "libsql>=0.1.11",
 ]
 
 [project.optional-dependencies]
@@ -38,3 +39,6 @@ Issues = "https://github.com/tursodatabase/libsql-sqlalchemy/issues"
 [project.entry-points."sqlalchemy.dialects"]
 "sqlite.libsql" = "sqlalchemy_libsql:SQLiteDialect_libsql"
 "sqlite.aiolibsql" = "sqlalchemy_libsql:SQLiteDialect_aiolibsql"
+
+[tool.pytest.ini_options]
+asyncio_default_fixture_loop_scope = "function"

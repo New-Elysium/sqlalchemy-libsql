@@ -1,10 +1,169 @@
+"""Asyncio flavour of the libSQL dialect.
+
+The ``libsql`` driver is synchronous, so SQLAlchemy's asyncio extension needs
+an adaptation layer in between.  The classes below expose the sync driver
+through an awaitable (DBAPI-over-asyncio style) interface and then reuse
+SQLAlchemy's own ``AsyncAdapt_dbapi_*`` classes for the greenlet bridge.
+
+Note that the underlying calls are *not* offloaded to a thread: they run
+directly on the event loop, so a slow remote query blocks the loop.
+"""
+
+from __future__ import annotations
+
+from typing import Any, Optional
+
+from sqlalchemy import pool
+from sqlalchemy.connectors.asyncio import (
+    AsyncAdapt_dbapi_connection,
+    AsyncAdapt_dbapi_cursor,
+)
+
 from sqlalchemy_libsql.libsql import SQLiteDialect_libsql
 
 
+class _AsyncCursor:
+    """Awaitable facade over a ``libsql.Cursor``."""
+
+    def __init__(self, cursor: Any):
+        self._cursor = cursor
+
+    async def __aenter__(self) -> "_AsyncCursor":
+        return self
+
+    async def __aexit__(self, *exc_info: Any) -> None:
+        self._cursor.close()
+
+    @property
+    def description(self) -> Any:
+        return self._cursor.description
+
+    @property
+    def rowcount(self) -> int:
+        return self._cursor.rowcount
+
+    @property
+    def lastrowid(self) -> Optional[int]:
+        return self._cursor.lastrowid
+
+    @property
+    def arraysize(self) -> int:
+        return self._cursor.arraysize
+
+    @arraysize.setter
+    def arraysize(self, value: int) -> None:
+        self._cursor.arraysize = value
+
+    async def close(self) -> None:
+        self._cursor.close()
+
+    async def execute(self, operation: Any, parameters: Any = ()) -> "_AsyncCursor":
+        self._cursor.execute(operation, parameters)
+        return self
+
+    async def executemany(self, operation: Any, seq_of_parameters: Any) -> "_AsyncCursor":
+        self._cursor.executemany(operation, list(seq_of_parameters))
+        return self
+
+    async def fetchone(self) -> Any:
+        return self._cursor.fetchone()
+
+    async def fetchmany(self, size: Optional[int] = None) -> Any:
+        return self._cursor.fetchmany(size) or []
+
+    async def fetchall(self) -> Any:
+        return self._cursor.fetchall() or []
+
+    async def nextset(self) -> None:
+        return None
+
+    async def setinputsizes(self, sizes: Any) -> None:
+        return None
+
+
+class _AsyncConnection:
+    """Awaitable facade over a ``libsql.Connection``."""
+
+    def __init__(self, connection: Any):
+        self._connection = connection
+
+    @property
+    def isolation_level(self) -> Optional[str]:
+        return self._connection.isolation_level
+
+    def cursor(self) -> _AsyncCursor:
+        return _AsyncCursor(self._connection.cursor())
+
+    async def commit(self) -> None:
+        self._connection.commit()
+
+    async def rollback(self) -> None:
+        self._connection.rollback()
+
+    async def close(self) -> None:
+        self._connection.close()
+
+
+class AsyncAdapt_libsql_cursor(AsyncAdapt_dbapi_cursor):
+    __slots__ = ()
+
+
+class AsyncAdapt_libsql_connection(AsyncAdapt_dbapi_connection):
+    __slots__ = ()
+
+    _cursor_cls = AsyncAdapt_libsql_cursor
+
+    @property
+    def isolation_level(self) -> Optional[str]:
+        return self._connection.isolation_level
+
+
+class AsyncAdapt_libsql_dbapi:
+    """DBAPI module facade whose ``connect()`` returns an adapted connection."""
+
+    def __init__(self, libsql: Any):
+        self.libsql = libsql
+        self.paramstyle = "qmark"
+
+    @property
+    def exceptions_module(self) -> Any:
+        return self.libsql
+
+    def __getattr__(self, key: str) -> Any:
+        # Everything else (Error, sqlite_version_info, ...) comes from libsql.
+        return getattr(self.libsql, key)
+
+    def connect(self, *args: Any, **kwargs: Any) -> AsyncAdapt_libsql_connection:
+        return AsyncAdapt_libsql_connection(
+            self, _AsyncConnection(self.libsql.connect(*args, **kwargs))
+        )
+
+
 class SQLiteDialect_aiolibsql(SQLiteDialect_libsql):
-    driver = "libsql"
+    driver = "aiolibsql"
     supports_statement_cache = SQLiteDialect_libsql.supports_statement_cache
     is_async = True
+
+    @classmethod
+    def import_dbapi(cls) -> AsyncAdapt_libsql_dbapi:
+        import libsql
+
+        return AsyncAdapt_libsql_dbapi(libsql)
+
+    def on_connect(self):
+        # libsql has no create_function(), so there is nothing to set up.
+        return None
+
+    @classmethod
+    def get_pool_class(cls, url):
+        # Local files and remote/embedded databases can have one connection per
+        # pool slot; a plain in-memory database must share a single connection.
+        if url.host or cls._is_url_file_db(url):
+            return pool.AsyncAdaptedQueuePool
+        return pool.StaticPool
+
+    def get_driver_connection(self, connection: Any) -> Any:
+        return connection._connection._connection
 
 
 dialect = SQLiteDialect_aiolibsql

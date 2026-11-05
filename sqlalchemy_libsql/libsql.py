@@ -105,6 +105,14 @@ class SQLiteDialect_libsql(SQLiteDialect_pysqlite):
 
         libsql_opts.setdefault("check_same_thread", not self._is_url_file_db(url))
 
+        # libsql.connect() only accepts a subset of the sqlite3 keywords, and
+        # spells the ones it merely tolerates with a leading underscore.
+        for key in ("check_same_thread", "uri"):
+            if key in libsql_opts:
+                libsql_opts[f"_{key}"] = libsql_opts.pop(key)
+        for key in ("detect_types", "cached_statements"):
+            libsql_opts.pop(key, None)
+
         return ([connect_url], libsql_opts)
 
 
