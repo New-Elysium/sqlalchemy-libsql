@@ -1,12 +1,12 @@
 [project]
 name = "sqlalchemy-libsql"
-version = "0.2.0"
+version = "0.5.0"
 description = "SQLAlchemy dialect for libSQL"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [
-    { name = "Levy Albuquerque", email = "levy@turso.tech" },
+    { name = "Srikanth Gopalakrishnan", email = "srikanth.gokr@gmail.com" },
 ]
 keywords = ["sqlalchemy", "libsql", "database", "dialect"]
 classifiers = [
@@ -19,12 +19,13 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: 3.15"
     "Topic :: Database",
 ]
 dependencies = [
-    "sqlalchemy>=2.0.44",
+    "sqlalchemy>=2.0.57",
     "greenlet>=3.0.3",
-    "libsql>=0.1.11",
+    "libsql-py>=1.0.0",
 ]
 
 [project.optional-dependencies]
@@ -32,8 +33,8 @@ dev = [
     "pytest>=8.3.5",
     "pytest-cov>=4.1.0",
     "pytest-asyncio>=0.23.5",
-    "ruff>=0.15",
-    "ty>=0.0.1a1",
+    "ruff>=0.17",
+    "ty>=0.0.92",
 ]
 
 [project.urls]
@@ -54,8 +55,3 @@ target-version = "py310"
 
 [tool.ruff.lint]
 select = ["E4", "E7", "E9", "F", "W", "I", "UP", "B", "PYI"]
-
-[tool.ty.analysis]
-# PyPI libsql <= 0.1.11 ships no type information (stubs land in the next
-# release, see libsql-python's libsql.pyi); drop this once the floor has them.
-replace-imports-with-any = ["libsql"]
